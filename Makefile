@@ -313,8 +313,8 @@ jsonnet-kube-prom-manifests:
 	mkdir -p _kpbuild && cd _kpbuild  && mkdir -p cb-kube-prometheus
 	cd _kpbuild/cb-kube-prometheus && git clone https://github.com/prometheus-operator/kube-prometheus . &&	git checkout 7fafc4cadc1
 	cd _kpbuild/cb-kube-prometheus && \
-		time docker run --rm -v $$(pwd):$$(pwd) --workdir $$(pwd) quay.io/coreos/jsonnet-ci \
-			sh -c 'jb install && chmod -R 777 *'
+		time docker run --rm -v $$(pwd):$$(pwd) --workdir $$(pwd) golang:1.21-alpine \
+			sh -c 'export PATH=$$PATH:/root/go/bin && go install github.com/google/go-jsonnet/cmd/jsonnet@latest && go install github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb@latest && jb install && chmod -R 777 *'
 	cd _kpbuild/cb-kube-prometheus && /bin/ls -ahl
 	cp k8s/kube-prometheus/conbench-flavor.jsonnet _kpbuild/cb-kube-prometheus
 	cp k8s/kube-prometheus/conbench-grafana-dashboard.json _kpbuild/cb-kube-prometheus
@@ -355,6 +355,6 @@ jsonnet-kube-prom-manifests:
 	cd _kpbuild/cb-kube-prometheus && \
 		wget https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/7fafc4cadc1/build.sh -O build.sh
 	cd _kpbuild/cb-kube-prometheus && \
-		time docker run  --rm -v $$(pwd):$$(pwd) --workdir $$(pwd) quay.io/coreos/jsonnet-ci \
-			sh -c 'bash build.sh conbench-flavor.jsonnet && chmod -R 777 *'
+		time docker run  --rm -v $$(pwd):$$(pwd) --workdir $$(pwd) golang:1.21-alpine \
+			sh -c 'apk add --no-cache bash && export PATH=$$PATH:/root/go/bin && go install github.com/google/go-jsonnet/cmd/jsonnet@latest && bash build.sh conbench-flavor.jsonnet && chmod -R 777 *'
 	echo "compiled manifest files: _kpbuild/cb-kube-prometheus/manifests"

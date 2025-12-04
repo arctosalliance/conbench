@@ -35,13 +35,13 @@ build_and_push() {
   docker images | grep conbench
 
   docker tag ${CB_WEBAPP_IMAGE_NAME}:latest ${IMAGE_SPEC}
-  aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
+  aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${DOCKER_REGISTRY}
   docker push ${IMAGE_SPEC}
 }
 
 deploy_secrets_and_config() {
 
-  aws eks --region us-east-2 update-kubeconfig --name ${EKS_CLUSTER}
+  aws eks --region us-east-1 update-kubeconfig --name ${EKS_CLUSTER}
   kubectl config set-context --current --namespace=${NAMESPACE}
 
   if [ -z "$GOOGLE_CLIENT_ID" ]; then
@@ -83,7 +83,7 @@ deploy_secrets_and_config() {
 run_migrations() {
   set -x
 
-  aws eks --region us-east-2 update-kubeconfig --name ${EKS_CLUSTER}
+  aws eks --region us-east-1 update-kubeconfig --name ${EKS_CLUSTER}
   kubectl config set-context --current --namespace=${NAMESPACE}
 
   sed "s|{{CONBENCH_WEBAPP_IMAGE_SPEC}}|${IMAGE_SPEC}|g" \
@@ -120,7 +120,7 @@ deploy() {
   # have the `--group system:masters --username admin` privilege, see:
   # infra/blob/0a21e9a2eee1ea158d2a2a5d216407741feb3931/conbench/app/stacks/eks/main.tf#L80
   # EKS_CLUSTER is currently "vd-2" for cb&cb-staging.
-  aws eks --region us-east-2 update-kubeconfig --name ${EKS_CLUSTER}
+  aws eks --region us-east-1 update-kubeconfig --name ${EKS_CLUSTER}
 
   # All of the following kubectl commands operate on a definite namespace.
   # NAMESPACE is something like "default" or "staging"
@@ -200,7 +200,7 @@ deploy() {
 
 rollback() {
   set -x
-  aws eks --region us-east-2 update-kubeconfig --name ${EKS_CLUSTER}
+  aws eks --region us-east-1 update-kubeconfig --name ${EKS_CLUSTER}
   kubectl config set-context --current --namespace=${NAMESPACE}
   kubectl rollout undo deployment.v1.apps/conbench-deployment
   kubectl rollout status deployment/conbench-deployment
