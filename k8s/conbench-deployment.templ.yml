@@ -52,7 +52,7 @@ spec:
         # system by allowing for more containers (replicas). Having one process
         # per container also simplifies log output, removes the preload topic
         # and prom metrics coordination topic from the picture.
-        command: ["gunicorn", "-c", "conbench/gunicorn-conf.py"]
+        command: ["gunicorn", "-c", "conbench/gunicorn-conf.py", "--timeout", "300"]
         imagePullPolicy: "Always"
         ports:
           - name: gunicorn-port
