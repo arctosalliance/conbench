@@ -625,6 +625,9 @@ def _add_rolling_stats_columns_to_df(
     )
 
     # Add column with rolling mean of the SVSs (only inside of the segment)
+    # Note: we use .droplevel() to remove groupby levels from the MultiIndex,
+    # allowing pandas to align by the original DataFrame index instead of using
+    # .values which can cause length mismatches when there are NaN groupby keys.
     df.loc[~df.is_outlier, "rolling_mean_excluding_this_commit"] = (
         df.loc[~df.is_outlier]
         .groupby(["history_fingerprint", "segment_id"])
@@ -636,7 +639,7 @@ def _add_rolling_stats_columns_to_df(
             min_periods=1,
         )["svs"]
         .mean()
-        .values
+        .droplevel([0, 1])
     )
     # (and fill NaNs at the beginning of segments with the first value)
     df.loc[~df.is_outlier, "rolling_mean_excluding_this_commit"] = df.loc[
@@ -655,7 +658,7 @@ def _add_rolling_stats_columns_to_df(
                 min_periods=1,
             )["svs"]
             .mean()
-            .values
+            .droplevel([0, 1])
         )
     else:
         df["rolling_mean"] = df["rolling_mean_excluding_this_commit"]
@@ -676,7 +679,7 @@ def _add_rolling_stats_columns_to_df(
             min_periods=1,
         )["residual"]
         .std()
-        .values
+        .droplevel(0)
     )
 
     return df
