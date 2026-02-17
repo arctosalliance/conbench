@@ -18,7 +18,7 @@ numpy
 oauthlib
 openapi-spec-validator
 orjson
-pandas>=2
+pandas>=2,<3
 prometheus-client
 prometheus-flask-exporter
 psycopg2
