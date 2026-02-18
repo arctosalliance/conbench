@@ -20,12 +20,6 @@ export IMAGE_SPEC="${DOCKER_REGISTRY}/${CB_WEBAPP_IMAGE_NAME}:${BUILDKITE_COMMIT
 # NAMESPACE (indicating the k8s namespace to deploy into)
 # ...
 
-# The following three environment variables _may_ be set, for configuring that
-# part of the Conbench-flavored kube-prometheus stack that used Prometheus'
-# remote_write protocol to forward data to a long-term storage/alerting system.
-# PROM_REMOTE_WRITE_ENDPOINT_URL
-# PROM_REMOTE_WRITE_API_TOKEN
-# PROM_REMOTE_WRITE_USERNAME
 
 build_and_push() {
   set -x
@@ -153,49 +147,6 @@ deploy() {
   kubectl rollout status deployment/conbench-deployment
 
 
-  # Note(JP): let's do a bit of magic. In the special case of working against
-  # vd-2 (specific EKS cluster in a specific AWS account, powering two specific
-  # Conbench deployments): install the conbench-flavored kube-prometheus stack,
-  # or update it. Updates may be as tiny as rolling out Grafana dashboard
-  # changes. I really do hope that this works (that it is OK to run this even N
-  # times per day against the same k8s cluster), because this will be fantastic
-  # in terms of developer productivity. The comments in
-  # k8s/kube-prometheus/deploy-or-update.sh explain relevant concepts. Notably,
-  # `k8s/kube-prometheus/deploy-or-update.sh` itself is tested in Conbench repo
-  # CI as part of the minikube flow.
-
-  if [[ "$EKS_CLUSTER" == "vd-2" ]]; then
-    export PROM_REMOTE_WRITE_CLUSTER_LABEL_VALUE="vd-2"
-    # The k8s namespaces that the Conbench web application lives in on this EKS
-    # cluster. This is EKS-cluster-specific config, i.e. not Conbench
-    # deployment-specific config. Namespaces monitored here are going to be
-    # monitored by kube-prometheus.
-    export KUBE_PROM_ADDITIONAL_NAMESPACE_STRING="'default', 'staging'"
-  elif [[ "$EKS_CLUSTER" == "ursa-2" ]]; then
-    export PROM_REMOTE_WRITE_CLUSTER_LABEL_VALUE="ursa-2"
-    export KUBE_PROM_ADDITIONAL_NAMESPACE_STRING="'default', 'velox'"
-  fi
-
-  # Prepare environment variables for configuring the remote_write forwarding
-  # component of the system.
-  if [[ -z "${PROM_REMOTE_WRITE_ENDPOINT_URL}" ]]; then
-    echo "env var PROM_REMOTE_WRITE_ENDPOINT_URL not configured"
-  else
-    export PROM_REMOTE_WRITE_PASSWORD_FILE_PATH="__prw_api_token"
-
-    echo "PROM_REMOTE_WRITE_USERNAME: $PROM_REMOTE_WRITE_USERNAME"
-    echo "PROM_REMOTE_WRITE_ENDPOINT_URL: $PROM_REMOTE_WRITE_ENDPOINT_URL"
-    echo "PROM_REMOTE_WRITE_CLUSTER_LABEL_VALUE: $PROM_REMOTE_WRITE_CLUSTER_LABEL_VALUE"
-    echo "PROM_REMOTE_WRITE_PASSWORD_FILE_PATH: $PROM_REMOTE_WRITE_PASSWORD_FILE_PATH"
-    echo "$PROM_REMOTE_WRITE_API_TOKEN" > "$PROM_REMOTE_WRITE_PASSWORD_FILE_PATH"
-    stat $PROM_REMOTE_WRITE_PASSWORD_FILE_PATH
-  fi
-
-  set +x
-  make jsonnet-kube-prom-manifests
-  echo "run k8s/kube-prometheus/deploy-or-update.sh, and pray that this does not impede the robustness of our deploy pipeline"
-  export CONBENCH_REPO_ROOT_DIR="$(pwd)"
-  bash k8s/kube-prometheus/deploy-or-update.sh
 }
 
 rollback() {
