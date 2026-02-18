@@ -44,3 +44,35 @@ def test_tznaive_iso8601_to_tzaware_dt(teststring: str):
 )
 def test_tznaive_dt_to_aware_iso8601_for_api(param: Tuple[datetime, str]):
     assert conbench.util.tznaive_dt_to_aware_iso8601_for_api(param[0]) == param[1]
+
+
+def test_tznaive_iso8601_to_tzaware_dt_nat_single():
+    """NaT (pandas null timestamp stringified) must not crash the converter.
+
+    When pandas NaT values are serialized via .isoformat() the result is the
+    string 'NaT'.  datetime.fromisoformat('NaT') raises ValueError, so the
+    converter must handle this gracefully and return None.
+    """
+    result = conbench.util.tznaive_iso8601_to_tzaware_dt("NaT")
+    assert result is None
+
+
+def test_tznaive_iso8601_to_tzaware_dt_nat_in_list():
+    """When a list of timestamp strings contains 'NaT' entries, the converter
+    must return None for those positions while still converting valid strings.
+    """
+    inputs = ["2022-03-03T19:48:06", "NaT", "2023-01-01T00:00:00"]
+    results = conbench.util.tznaive_iso8601_to_tzaware_dt(inputs)
+
+    assert len(results) == 3
+    assert results[0].tzinfo == timezone.utc
+    assert results[0].year == 2022
+    assert results[1] is None
+    assert results[2].tzinfo == timezone.utc
+    assert results[2].year == 2023
+
+
+def test_tznaive_iso8601_to_tzaware_dt_all_nat():
+    """Edge case: every entry is NaT."""
+    results = conbench.util.tznaive_iso8601_to_tzaware_dt(["NaT", "NaT"])
+    assert results == [None, None]

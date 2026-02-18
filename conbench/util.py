@@ -109,6 +109,8 @@ def tznaive_iso8601_to_tzaware_dt(input):
     """
 
     def _convert(s: str):
+        if s == "NaT":
+            return None
         dt = datetime.fromisoformat(s)
 
         if dt.tzinfo == timezone.utc:

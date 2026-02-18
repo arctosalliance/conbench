@@ -309,7 +309,7 @@ def _source(
 
     # Get stringified versions of those datetimes for UI display purposes.
     # Include timezone information. This shows UTC for the %Z.
-    date_strings = [d.strftime("%Y-%m-%d %H:%M %Z") for d in datetimes]
+    date_strings = [d.strftime("%Y-%m-%d %H:%M %Z") if d else "N/A" for d in datetimes]
 
     values_to_plot: List[float] = []
 
@@ -622,16 +622,17 @@ def time_series_plot(
         break_line_indexes=dist_change_indexes,
     )
 
-    t_start = source_svs_all.data["x"][0]
-    t_end = source_svs_all.data["x"][-1]
+    x_valid = [v for v in source_svs_all.data["x"] if v is not None]
+    t_start = x_valid[0] if x_valid else None
+    t_end = x_valid[-1] if x_valid else None
 
-    t_range = t_end - t_start
-
-    # Add explicit padding/buffer to left and right so that newest data point
-    # does not disappear under right plot boundary, and so that the oldest data
-    # point has space from legend.
-    t_start = t_start - (0.4 * t_range)
-    t_end = t_end + (0.07 * t_range)
+    if t_start is not None and t_end is not None:
+        t_range = t_end - t_start
+        # Add explicit padding/buffer to left and right so that newest data point
+        # does not disappear under right plot boundary, and so that the oldest data
+        # point has space from legend.
+        t_start = t_start - (0.4 * t_range)
+        t_end = t_end + (0.07 * t_range)
 
     p = bokeh.plotting.figure(
         x_axis_type="datetime",

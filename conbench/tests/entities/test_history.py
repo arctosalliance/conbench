@@ -14,6 +14,7 @@ from ...db import _session as Session
 from ...entities.benchmark_result import BenchmarkResult
 from ...entities.commit import Commit
 from ...entities.history import (
+    _add_rolling_stats_columns_to_df,
     _detect_shifts_with_trimmed_estimators,
     get_history_for_fingerprint,
     set_z_scores,
@@ -449,3 +450,69 @@ def test_set_z_scores_one_rep():
         history_fingerprints=[br.history_fingerprint],
     )
     assert_equal_leeway(br.z_score, -2.121)
+
+
+def test_add_rolling_stats_with_duplicate_timestamps():
+    """Verify _add_rolling_stats_columns_to_df does not crash when multiple
+    benchmark results share the same commit timestamp.
+
+    This reproduces the production error:
+        ValueError: cannot reindex on an axis with duplicate labels
+
+    The root cause: groupby().rolling().droplevel() can produce a Series with
+    duplicate index entries when rows share the same timestamp.  Assigning
+    that Series back via df.loc[mask, col] = series fails in pandas >= 2.x
+    because reindexing requires unique labels.
+    """
+    n = 6
+    # Two results share timestamp index 2 — this creates the duplicate index
+    # after droplevel.
+    timestamps = pd.to_datetime([
+        "2022-01-01", "2022-01-02", "2022-01-03",
+        "2022-01-03", "2022-01-04", "2022-01-05",
+    ])
+
+    df = pd.DataFrame({
+        "case_id": ["c1"] * n,
+        "context_id": ["ctx1"] * n,
+        "hash": ["h1"] * n,
+        "repository": ["repo"] * n,
+        "timestamp": timestamps,
+        "result_timestamp": timestamps,
+        "mean": [1.0, 2.0, 3.0, 3.5, 4.0, 5.0],
+        "svs": [1.0, 2.0, 3.0, 3.5, 4.0, 5.0],
+        "history_fingerprint": ["fp1"] * n,
+        "change_annotations": [None] * n,
+    })
+
+    # This must not raise ValueError
+    result = _add_rolling_stats_columns_to_df(df, include_current_commit_in_rolling_stats=True)
+
+    assert "rolling_mean" in result.columns
+    assert "rolling_stddev" in result.columns
+    assert "rolling_mean_excluding_this_commit" in result.columns
+    assert len(result) == n
+
+
+def test_add_rolling_stats_with_many_duplicate_timestamps():
+    """Stress test: all rows share the same commit timestamp."""
+    n = 10
+    same_ts = pd.to_datetime(["2022-06-15"] * n)
+
+    df = pd.DataFrame({
+        "case_id": ["c1"] * n,
+        "context_id": ["ctx1"] * n,
+        "hash": ["h1"] * n,
+        "repository": ["repo"] * n,
+        "timestamp": same_ts,
+        "result_timestamp": same_ts,
+        "mean": list(range(1, n + 1)),
+        "svs": [float(x) for x in range(1, n + 1)],
+        "history_fingerprint": ["fp1"] * n,
+        "change_annotations": [None] * n,
+    })
+
+    result = _add_rolling_stats_columns_to_df(df, include_current_commit_in_rolling_stats=False)
+
+    assert "rolling_mean" in result.columns
+    assert len(result) == n
