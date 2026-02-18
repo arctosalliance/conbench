@@ -509,3 +509,79 @@ def test_add_rolling_stats_with_many_duplicate_timestamps():
 
     assert "rolling_mean" in result.columns
     assert len(result) == n
+
+
+def test_add_rolling_stats_with_nat_timestamp():
+    """Regression test for production error:
+
+        ValueError: NumPy boolean array indexing assignment cannot assign
+        1532 input values to the 1533 output values where the mask is true
+
+    When commit timestamps contain NaT, the segment_id rolling sum can
+    produce NaN. Then groupby(["history_fingerprint", "segment_id"]) with
+    its default dropna=True drops rows with NaN segment_id, producing fewer
+    values than the boolean mask (~df.is_outlier) selects. This test ensures
+    that _add_rolling_stats_columns_to_df handles NaT timestamps without
+    crashing on the length mismatch.
+    """
+    n = 8
+    timestamps = pd.to_datetime([
+        "2022-01-01", "2022-01-02", "2022-01-03",
+        pd.NaT,  # this row will get NaN segment_id
+        "2022-01-05", "2022-01-06", "2022-01-07", "2022-01-08",
+    ])
+
+    df = pd.DataFrame({
+        "case_id": ["c1"] * n,
+        "context_id": ["ctx1"] * n,
+        "hash": ["h1"] * n,
+        "repository": ["repo"] * n,
+        "timestamp": timestamps,
+        "result_timestamp": timestamps,
+        "mean": [float(i) for i in range(1, n + 1)],
+        "svs": [float(i) for i in range(1, n + 1)],
+        "history_fingerprint": ["fp1"] * n,
+        "change_annotations": [None] * n,
+    })
+
+    result = _add_rolling_stats_columns_to_df(
+        df, include_current_commit_in_rolling_stats=True
+    )
+
+    # Must not crash and must preserve all rows
+    assert len(result) == n
+    assert "rolling_mean" in result.columns
+    assert "rolling_stddev" in result.columns
+    assert "rolling_mean_excluding_this_commit" in result.columns
+
+
+def test_add_rolling_stats_with_multiple_nat_timestamps():
+    """Same as above but with multiple NaT timestamps — higher chance of
+    triggering the length mismatch in production scenarios.
+    """
+    n = 10
+    timestamps = pd.to_datetime([
+        "2022-01-01", pd.NaT, "2022-01-03", "2022-01-04",
+        pd.NaT, "2022-01-06", "2022-01-07", pd.NaT,
+        "2022-01-09", "2022-01-10",
+    ])
+
+    df = pd.DataFrame({
+        "case_id": ["c1"] * n,
+        "context_id": ["ctx1"] * n,
+        "hash": ["h1"] * n,
+        "repository": ["repo"] * n,
+        "timestamp": timestamps,
+        "result_timestamp": timestamps,
+        "mean": [float(i) for i in range(1, n + 1)],
+        "svs": [float(i) for i in range(1, n + 1)],
+        "history_fingerprint": ["fp1"] * n,
+        "change_annotations": [None] * n,
+    })
+
+    result = _add_rolling_stats_columns_to_df(
+        df, include_current_commit_in_rolling_stats=True
+    )
+
+    assert len(result) == n
+    assert "rolling_mean" in result.columns

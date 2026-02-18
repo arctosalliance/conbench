@@ -625,9 +625,16 @@ def _add_rolling_stats_columns_to_df(
     )
 
     # Add column with rolling mean of the SVSs (only inside of the segment)
+    # Note: after groupby+rolling+droplevel, the result Series is indexed by
+    # timestamp (from the `on` parameter). We use .reset_index(drop=True) to
+    # get a positional index matching the filtered DataFrame, avoiding both:
+    # - .values length mismatches (when NaN groupby keys cause dropped rows)
+    # - .droplevel duplicate-index errors (when timestamps are not unique)
+    # dropna=False: keep rows with NaN segment_id (from NaT timestamps) in
+    # the groupby result, so the output length matches the boolean mask.
     df.loc[~df.is_outlier, "rolling_mean_excluding_this_commit"] = (
         df.loc[~df.is_outlier]
-        .groupby(["history_fingerprint", "segment_id"])
+        .groupby(["history_fingerprint", "segment_id"], dropna=False)
         .rolling(
             _CommitIndexer(window_size=Config.DISTRIBUTION_COMMITS),
             on="timestamp",
@@ -636,6 +643,8 @@ def _add_rolling_stats_columns_to_df(
             min_periods=1,
         )["svs"]
         .mean()
+        .droplevel([0, 1])
+        .reset_index(drop=True)
         .values
     )
     # (and fill NaNs at the beginning of segments with the first value)
@@ -647,7 +656,7 @@ def _add_rolling_stats_columns_to_df(
     if include_current_commit_in_rolling_stats:
         df.loc[~df.is_outlier, "rolling_mean"] = (
             df.loc[~df.is_outlier]
-            .groupby(["history_fingerprint", "segment_id"])
+            .groupby(["history_fingerprint", "segment_id"], dropna=False)
             .rolling(
                 _CommitIndexer(window_size=Config.DISTRIBUTION_COMMITS),
                 on="timestamp",
@@ -655,6 +664,8 @@ def _add_rolling_stats_columns_to_df(
                 min_periods=1,
             )["svs"]
             .mean()
+            .droplevel([0, 1])
+            .reset_index(drop=True)
             .values
         )
     else:
@@ -668,7 +679,7 @@ def _add_rolling_stats_columns_to_df(
     # (these can go outside the segment since we assume they don't change much)
     df.loc[~df.is_outlier, "rolling_stddev"] = (
         df.loc[~df.is_outlier]
-        .groupby(["history_fingerprint"])  # not segment
+        .groupby(["history_fingerprint"], dropna=False)  # not segment
         .rolling(
             _CommitIndexer(window_size=Config.DISTRIBUTION_COMMITS),
             on="timestamp",
@@ -676,6 +687,8 @@ def _add_rolling_stats_columns_to_df(
             min_periods=1,
         )["residual"]
         .std()
+        .droplevel(0)
+        .reset_index(drop=True)
         .values
     )
 
