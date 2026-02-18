@@ -454,19 +454,10 @@ def test_set_z_scores_one_rep():
 
 def test_add_rolling_stats_with_duplicate_timestamps():
     """Verify _add_rolling_stats_columns_to_df does not crash when multiple
-    benchmark results share the same commit timestamp.
-
-    This reproduces the production error:
-        ValueError: cannot reindex on an axis with duplicate labels
-
-    The root cause: groupby().rolling().droplevel() can produce a Series with
-    duplicate index entries when rows share the same timestamp.  Assigning
-    that Series back via df.loc[mask, col] = series fails in pandas >= 2.x
-    because reindexing requires unique labels.
+    benchmark results share the same commit timestamp, and that all rows
+    receive rolling stats (no NaN gaps that would break plot bands).
     """
     n = 6
-    # Two results share timestamp index 2 — this creates the duplicate index
-    # after droplevel.
     timestamps = pd.to_datetime([
         "2022-01-01", "2022-01-02", "2022-01-03",
         "2022-01-03", "2022-01-04", "2022-01-05",
@@ -485,13 +476,15 @@ def test_add_rolling_stats_with_duplicate_timestamps():
         "change_annotations": [None] * n,
     })
 
-    # This must not raise ValueError
     result = _add_rolling_stats_columns_to_df(df, include_current_commit_in_rolling_stats=True)
 
     assert "rolling_mean" in result.columns
     assert "rolling_stddev" in result.columns
     assert "rolling_mean_excluding_this_commit" in result.columns
     assert len(result) == n
+    # Every row must have rolling stats — no NaN gaps
+    assert result["rolling_mean"].notna().all()
+    assert result["rolling_mean_excluding_this_commit"].notna().all()
 
 
 def test_add_rolling_stats_with_many_duplicate_timestamps():

@@ -625,10 +625,7 @@ def _add_rolling_stats_columns_to_df(
     )
 
     # Add column with rolling mean of the SVSs (only inside of the segment)
-    # Note: we use .droplevel() to remove groupby levels from the MultiIndex,
-    # allowing pandas to align by the original DataFrame index instead of using
-    # .values which can cause length mismatches when there are NaN groupby keys.
-    _rolling_mean_excl = (
+    df.loc[~df.is_outlier, "rolling_mean_excluding_this_commit"] = (
         df.loc[~df.is_outlier]
         .groupby(["history_fingerprint", "segment_id"])
         .rolling(
@@ -639,10 +636,8 @@ def _add_rolling_stats_columns_to_df(
             min_periods=1,
         )["svs"]
         .mean()
-        .droplevel([0, 1])
+        .values
     )
-    _rolling_mean_excl = _rolling_mean_excl[~_rolling_mean_excl.index.duplicated(keep="last")]
-    df.loc[~df.is_outlier, "rolling_mean_excluding_this_commit"] = _rolling_mean_excl
     # (and fill NaNs at the beginning of segments with the first value)
     df.loc[~df.is_outlier, "rolling_mean_excluding_this_commit"] = df.loc[
         ~df.is_outlier, "rolling_mean_excluding_this_commit"
@@ -650,7 +645,7 @@ def _add_rolling_stats_columns_to_df(
 
     # ...but if requested, include the current commit
     if include_current_commit_in_rolling_stats:
-        _rolling_mean = (
+        df.loc[~df.is_outlier, "rolling_mean"] = (
             df.loc[~df.is_outlier]
             .groupby(["history_fingerprint", "segment_id"])
             .rolling(
@@ -660,10 +655,8 @@ def _add_rolling_stats_columns_to_df(
                 min_periods=1,
             )["svs"]
             .mean()
-            .droplevel([0, 1])
+            .values
         )
-        _rolling_mean = _rolling_mean[~_rolling_mean.index.duplicated(keep="last")]
-        df.loc[~df.is_outlier, "rolling_mean"] = _rolling_mean
     else:
         df["rolling_mean"] = df["rolling_mean_excluding_this_commit"]
 
@@ -673,7 +666,7 @@ def _add_rolling_stats_columns_to_df(
 
     # Add column with the rolling standard deviation of the residuals
     # (these can go outside the segment since we assume they don't change much)
-    _rolling_stddev = (
+    df.loc[~df.is_outlier, "rolling_stddev"] = (
         df.loc[~df.is_outlier]
         .groupby(["history_fingerprint"])  # not segment
         .rolling(
@@ -683,10 +676,8 @@ def _add_rolling_stats_columns_to_df(
             min_periods=1,
         )["residual"]
         .std()
-        .droplevel(0)
+        .values
     )
-    _rolling_stddev = _rolling_stddev[~_rolling_stddev.index.duplicated(keep="last")]
-    df.loc[~df.is_outlier, "rolling_stddev"] = _rolling_stddev
 
     return df
 
