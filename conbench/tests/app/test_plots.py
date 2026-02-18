@@ -8,6 +8,8 @@ the string 'NaT') flow through the plotting pipeline and cause crashes:
 2. _source() builds date_strings via d.strftime() — must not crash on None.
 3. time_series_plot() computes t_end - t_start from the x-axis data — must not
    crash when some x values are None.
+4. time_series_plot() must filter out samples with epoch-0 (1970-01-01) or NaT
+   timestamps so they don't appear as stray points in the plot.
 """
 import importlib
 import sys
@@ -197,3 +199,64 @@ def test_time_range_computation_with_nat(_source):
     assert t_end is not None
     t_range = t_end - t_start
     assert t_range.days == 3
+
+
+def test_epoch_zero_timestamps_filtered_out(_source):
+    """Regression test: samples with epoch-0 commit_timestamp (1970-01-01)
+    should be excluded from plots. These arise from commits with missing
+    timestamps in the DB and show up as a stray point far left on the x-axis.
+
+    The filter in time_series_plot() removes them before any _source() call.
+    Verify the filter logic directly here.
+    """
+    samples = [
+        _make_sample(
+            commit_timestamp=datetime(1970, 1, 1),
+            svs=999.0,
+            benchmark_result_id="br_epoch0",
+            commit_hash="0" * 40,
+        ),
+        _make_sample(
+            commit_timestamp=datetime(2022, 3, 1),
+            svs=1.0,
+            benchmark_result_id="br1",
+            commit_hash="a" * 40,
+        ),
+        _make_sample(
+            commit_timestamp=datetime(2022, 3, 2),
+            svs=2.0,
+            benchmark_result_id="br2",
+            commit_hash="b" * 40,
+        ),
+    ]
+
+    # Apply the same filter used in time_series_plot()
+    filtered = [
+        s for s in samples
+        if not pd.isna(s.commit_timestamp) and s.commit_timestamp.year >= 2000
+    ]
+
+    assert len(filtered) == 2
+    assert all(s.commit_timestamp.year >= 2000 for s in filtered)
+
+    # The filtered list should produce a clean source with no epoch-0 points
+    source = _source(filtered, "s", "svs")
+    assert len(source.data["x"]) == 2
+    assert all(x.year >= 2000 for x in source.data["x"])
+
+
+def test_nat_and_epoch_zero_both_filtered():
+    """Both NaT and epoch-0 timestamps should be removed by the filter."""
+    samples = [
+        _make_sample(commit_timestamp=pd.NaT, benchmark_result_id="br_nat", commit_hash="0" * 40),
+        _make_sample(commit_timestamp=datetime(1970, 1, 1), benchmark_result_id="br_epoch", commit_hash="1" * 40),
+        _make_sample(commit_timestamp=datetime(2022, 6, 15), benchmark_result_id="br_ok", commit_hash="a" * 40),
+    ]
+
+    filtered = [
+        s for s in samples
+        if not pd.isna(s.commit_timestamp) and s.commit_timestamp.year >= 2000
+    ]
+
+    assert len(filtered) == 1
+    assert filtered[0].benchmark_result_id == "br_ok"

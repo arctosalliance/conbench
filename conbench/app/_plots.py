@@ -7,6 +7,7 @@ from typing import Dict, List, Literal, Optional, Tuple, no_type_check
 import bokeh.events
 import bokeh.models
 import bokeh.plotting
+import pandas as pd
 
 import conbench.units
 from conbench import util
@@ -576,6 +577,13 @@ def time_series_plot(
     # The unit string for the axis label may be different (longer, for example)
     unit_symbol = conbench.units.legacy_convert(units.pop())
     unit_str_for_plot_axis_label = conbench.units.longform(unit_symbol)
+
+    # Filter out samples with clearly invalid timestamps (epoch 0 from missing
+    # commit dates, or NaT). These show up as a stray point at 1970-01-01.
+    samples = [
+        s for s in samples
+        if not pd.isna(s.commit_timestamp) and s.commit_timestamp.year >= 2000
+    ]
 
     samples_with_z_score_analysis = [s for s in samples if s.zscorestats.rolling_mean]
     inliers = [s for s in samples if not s.zscorestats.is_outlier]
